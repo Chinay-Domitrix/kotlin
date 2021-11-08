@@ -56,6 +56,7 @@ import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.resolve.DescriptorUtils
 import org.jetbrains.kotlin.utils.DFS
 import org.jetbrains.kotlin.utils.addToStdlib.safeAs
+import java.io.File
 
 fun IrDeclaration.getJvmNameFromAnnotation(): String? {
     // TODO lower @JvmName?
@@ -261,6 +262,12 @@ fun IrClass.getSingleAbstractMethod(): IrSimpleFunction? =
 
 fun IrFile.getKtFile(): KtFile? =
     (fileEntry as? PsiIrFileEntry)?.psiFile as KtFile?
+
+fun IrFile.getIoFile(): File? =
+    when (val fe = fileEntry) {
+        is PsiIrFileEntry -> fe.psiFile.virtualFile?.path?.let(::File)
+        else -> File(fe.name).takeIf { it.exists() }
+    }
 
 inline fun IrElement.hasChild(crossinline block: (IrElement) -> Boolean): Boolean {
     var result = false

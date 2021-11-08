@@ -9,6 +9,7 @@ import com.intellij.openapi.util.TextRange
 import org.jetbrains.kotlin.backend.common.CodegenUtil
 import org.jetbrains.kotlin.backend.common.ir.ir2string
 import org.jetbrains.kotlin.backend.jvm.hasMangledReturnType
+import org.jetbrains.kotlin.backend.jvm.ir.getIoFile
 import org.jetbrains.kotlin.backend.jvm.ir.getKtFile
 import org.jetbrains.kotlin.backend.jvm.ir.inlineScopeVisibility
 import org.jetbrains.kotlin.codegen.inline.*
@@ -19,6 +20,7 @@ import org.jetbrains.kotlin.incremental.components.Position
 import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrFunction
+import org.jetbrains.kotlin.ir.declarations.name
 import org.jetbrains.kotlin.ir.descriptors.toIrBasedDescriptor
 import org.jetbrains.kotlin.ir.expressions.IrFunctionAccessExpression
 import org.jetbrains.kotlin.ir.expressions.IrLoop
@@ -51,7 +53,7 @@ class IrSourceCompilerForInline(
                 root.classCodegen.type.internalName,
                 root.signature.asmMethod,
                 root.irFunction.inlineScopeVisibility,
-                root.irFunction.fileParent.getKtFile(),
+                root.irFunction.fileParent.getIoFile(),
                 callElement.psiElement?.let { CodegenUtil.getLineNumberForElement(it, false) } ?: 0
             )
         }
@@ -75,15 +77,17 @@ class IrSourceCompilerForInline(
         }
         if (jvmSignature.asmMethod.name != callee.name.asString()) {
             val ktFile = codegen.irFunction.fileParent.getKtFile()
-            if (ktFile != null && ktFile.doNotAnalyze == null) {
+            if ((ktFile != null && ktFile.doNotAnalyze == null) || ktFile == null) {
                 state.trackLookup(callee.parentAsClass.kotlinFqName, jvmSignature.asmMethod.name, object : LocationInfo {
-                    override val filePath = ktFile.virtualFilePath
+                    override val filePath = ktFile?.virtualFile?.path ?: codegen.irFunction.fileParent.name
 
                     override val position: Position
-                        get() = DiagnosticUtils.getLineAndColumnInPsiFile(
-                            ktFile,
-                            TextRange(callElement.startOffset, callElement.endOffset)
-                        ).let { Position(it.line, it.column) }
+                        get() =
+                            if (ktFile == null) Position.NO_POSITION
+                            else DiagnosticUtils.getLineAndColumnInPsiFile(
+                                ktFile,
+                                TextRange(callElement.startOffset, callElement.endOffset)
+                            ).let { Position(it.line, it.column) }
                 })
             }
         }
